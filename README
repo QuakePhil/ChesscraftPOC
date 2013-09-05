@@ -1,1 +1,9 @@
 Barely working code for chesscraft prototype
+
+To run, on the server go something like: php -f ./server.php &
+
+Then open index.php?game=xyz where xyz is a number that doesn't exist in games/
+
+Type in a name, click "play as black" or "play as white" and a friend of yours can do the same.
+
+If no friend is readily available, check "play vs AI" (currently AI only plays as black)

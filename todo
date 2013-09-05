@@ -24,3 +24,7 @@ better interface
 lobby (play vs ai auto, new game auto)
 
 resign button
+
+complete rewrite/overhaul of drag-drop interface, and websocket protocol
+
+currently its a mess :)
