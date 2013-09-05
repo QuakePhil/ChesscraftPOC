@@ -1,0 +1,26 @@
+uppercase names break move making
+
+queens available only by promotion?
+
+combined resource = pieces on board + resource
+
+space creep after combined resource cap is reached?
+
+if you are in check, and your time runs out, your resources should 
+decrease
+
+simplify in check detection to calculate opposing moves and check that way (no asq)
+
+alphabeta pruning for negamax and quiesce
+
+fix perft, see 
+http://chessprogramming.wikispaces.com/Initial+Position+Summary
+regarding knight moves at the very least
+and regarding perft special position 3 (see Perft+Results)
+
+
+better interface
+
+lobby (play vs ai auto, new game auto)
+
+resign button

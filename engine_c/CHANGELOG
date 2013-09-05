@@ -1,0 +1,30 @@
+2013-08-13 - C port from half baked PHP code
+2013-08-14 - Working on porting moves
+2013-08-15 - Basic moves without check detection
+2013-08-16 - Basic in check detection, perft good up to depth 4 (known depth 5 includes en passant)
+           - Common bugs in move detection - queen moved as bishop OR (not AND) rook because of else if
+           - And d2-d4 (and similar) were hopping over pieces
+           - Basic think() with quiescent alpha beta (thx chessprogramming wikispaces)
+2013-08-17 - Tested search for some mates, looks like it works, along with stalemate
+2013-08-18 - Beginnings of a C<->PHP interface with timed bestmove()
+
+2013-08-20 - Search limiter based on time, interface with PHP
+
+todo: Why is bestmove.php not working? see second board
+
+note: if engine is given a position where it is player a to move and playr b is in check (impossible)
+it keeps on trucking
+
+
+implement ttl and node_counter in quiesce
+
+implement variable board size positional values
+
+implement move ordering
+move ordering in quescence and captures in general
+value of captured - value of capturer 
+
+some 1 ply search too slow (put down a buncha pawns)
+so fix search timeout to account for that
+
+implement promotion (always queen)

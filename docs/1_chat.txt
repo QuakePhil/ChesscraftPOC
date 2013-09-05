@@ -1,0 +1,75 @@
+phil: yay
+phil: not sure why that's a bug
+phil: but oh well I'll fix it later
+adam: haha awesome
+phil: so yeah, rts chess :)
+phil: you can only spawn pieces on the first rank
+phil: and pawns on the 2nd
+phil: everything else works like regular chess (except no checkmate detection yet)
+phil: u gonna move?
+adam: i clicked the rook to spawn
+adam: but can't spawn it
+phil: you drag it on the board
+phil: like a piece
+adam: oh nice
+phil: check
+phil: :)
+phil: lets go kasparov
+phil: :)
+adam: this game's amazing, you need to make it into a mobile app ASAP
+phil: hehe
+phil: I suppose since its a web app, its already a mobile app :p
+phil: I think that's checkmate
+phil: How many resources do you have?
+adam: 900
+adam: gg
+phil: gg
+phil: you can win by using a bug
+phil: but technically its a win for me :)
+adam: i love it, this is awesome
+adam: did you invent this variation
+phil: next version I'm going to make will be real time
+phil: because fuck waiting for the other guy to move
+phil: :)
+phil: and you'll get like 1 resource every second or something
+phil: also I can resize the board very easily
+phil: make it 5 by 5 squares
+phil: Or 20 by 20 or whatever
+phil: I guess I invented it since I came up with it
+phil: But I'm sure someone else has had this idea too
+phil: I mean there's chess variants like marsellaise chess where you can move a piece twice or you can move two pieces at once
+phil: Not sure if there's been this kind of variant yet which is basically rts - you start with a small base and build up based on that using resources
+adam: how would realtime work
+phil: you just make moves
+phil: without having to wait for the other guy
+adam: so you could spawn a pawn
+phil: so just like starcraft
+adam: and have him run across the screen
+phil: you'd have to build up a defense
+phil: well yeah
+phil: so you'd probably need a rook to keep the back rank clear in the beginning
+phil: and a couple pawns in front of your kinds to screen
+phil: and then you can develop a solid offense with pieces
+adam: cool i'd love to try that
+phil: cause you know how even in starcraft
+phil: you have cheese like sixpool and whatnot
+adam: yeah
+phil: so that would be the equivalent of spawning a bunch of pawns at the beginning hoping one goes through
+phil: and the rook isnt fast enough to capture them all lol
+phil: the only problem is avoiding deadlocks and conflicts in that
+phil: keeping everything in sync
+phil: or maybe
+phil: a compromise
+phil: where its turn based but you got 10 seconds to make a turn
+phil: and then you lose your turn and the other guy goes
+phil: that makes the technical aspects simple while keeping it rts paced
+adam: haha what if your opponent gets 1 resource/second
+phil: yeah
+phil: that's how i did it initially
+adam: you'd be rich against me
+phil: hehe
+phil: maybe you make resources during your opponents time
+phil: so that is another incentive to move fast
+adam: i know a guy who'd love to try this out, do you have to admin it?
+phil: go back to gchat, i'm closing this out
+

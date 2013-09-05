@@ -1,0 +1,115 @@
+<?php
+define('CB_SERVER_BIND_HOST', '0.0.0.0');
+define('CB_SERVER_BIND_PORT', 43188);
+define('CB_MAX_USERNAME_LENGTH', 18);
+
+
+// prevent the server from timing out
+set_time_limit(0);
+
+// include the web sockets server script (the server is started at the far bottom of this file)
+require 'ws.php';
+
+// users are stored in this global array with syntax: $users[ integer ClientID ] = string Username
+$users = array();
+
+// when a client sends data to the server
+function wsOnMessage($clientID, $message, $messageLength, $binary) {
+	// check if message length is 0
+	if ($messageLength == 0) {
+		wsClose($clientID);
+		return;
+	}
+	
+	// split the message by spaces into an array, and fetch the command
+var_dump($message);
+			wsSend($clientID, 'SERVER Message was blank.');
+			return;
+}
+
+// when a client closes or lost connection
+function wsOnClose($clientID, $status) {
+	// check if the client has sent a JOIN with a valid username
+	if (isUser($clientID)) {
+		removeUser($clientID);
+	}
+}
+
+// user functions
+function isUser($clientID) {
+	// checks if a user exists (if JOIN has previously been received from the client, with a valid username)
+	global $users;
+	return isset($users[$clientID]);
+}
+function addUser($clientID, $username) {
+	global $users;
+	
+	// let all clients know about this user joining (not including the user joining)
+	foreach ($users as $clientID2 => $username2) {
+		wsSend($clientID2, 'ONJOIN '.$username);
+	}
+	
+	// send list of usernames to the user joining
+	$usernames = getUsernames();
+	wsSend($clientID, 'USERS '.implode(' ', $usernames));
+	
+	// store the user's client ID and username
+	$users[$clientID] = $username;
+}
+function removeUser($clientID) {
+	global $users;
+	
+	// fetch username for the user leaving
+	$username = getUsername($clientID);
+	
+	// remove data stored for the user leaving
+	unset($users[$clientID]);
+	
+	// let all clients know about this user quitting (not including the user leaving)
+	foreach ($users as $clientID2 => $username2) {
+		wsSend($clientID2, 'ONQUIT '.$username);
+	}
+}
+
+// username functions
+function getUsername($clientID) {
+	// returns the username for a client
+	global $users;
+	return $users[$clientID];
+}
+function isUsername($username) {
+	// checks if the username is being used by any client
+	global $users;
+	foreach ($users as $username2) {
+		if ($username === $username2) return true;
+	}
+	return false;
+}
+function getUsernames() {
+	// returns an array of usernames
+	global $users;
+	
+	$usernames = array();
+	foreach ($users as $username) {
+		$usernames[] = $username;
+	}
+	
+	return $usernames;
+}
+
+// chat functions
+function sendChat($username, $text) {
+	// sends chat text to all clients
+	global $users;
+	foreach ($users as $clientID => $user) {
+		wsSend($clientID, 'ONTEXT '.$username.' '.$text);
+	}
+}
+
+
+
+
+// start the server
+wsStartServer(CB_SERVER_BIND_HOST, CB_SERVER_BIND_PORT);
+
+?>

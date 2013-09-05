@@ -1,0 +1,158 @@
+<?php
+
+// moves array is ['x', 'yz', x, y, tox, toy]
+// x - c for capture, or m for move
+// yz - y is color, z is piece (wn is white knight)
+
+$global_restrict_type = false; // for attack board generation we want captures only
+
+function record_a_move(&$moves, &$board, $move, $type, $restrict_type)
+	{
+	global $global_restrict_type;
+	if ($type == 'c')
+		$board['asq'][$board['s']][$move[4]][$move[5]] = true;
+
+	if ((!$restrict_type || $restrict_type == $type)
+	 && (!$global_restrict_type || $global_restrict_type == $type))
+		{
+		if ($global_restrict_type == 'c') // we do not do in check detection for 'c' only generate_moves()
+				// as that is used by in check detection itself
+			$moves[] = $move; //array('m', $board[$x][$y], $x, $y, $to_x, $to_y);
+		else
+			{
+			echo "checking ". algebraic($move). ": ";
+			if (in_check($board, $move))
+				echo ' we are still in check';
+			else
+				$moves[] = $move; //array('m', $board[$x][$y], $x, $y, $to_x, $to_y);
+			echo "\n";
+			}
+		}
+	else
+		echo "excluded ".algebraic($move).": $restrict_type global $global_restrict_type\n";
+	}
+
+// this function returns true only if the move is made on an empty space
+// for purposes of ray moves
+function attempt_a_move(&$moves, &$board, $x, $y, $to_x, $to_y, $restrict_type = false)
+	{
+	if ($to_x < 0 || $to_y < 0 || $to_x >= $board['w'] || $to_y >= $board['h'])
+		return false;
+
+//echo "attempt_a_move(moves, board, $x, $y, $to_x, $to_y, $restrict_type) with $global_restrict_type\n";
+	if ($board[$to_x][$to_y] == '--')
+		{
+		record_a_move($moves, $board
+			,array('m', $board[$x][$y], $x, $y, $to_x, $to_y)
+			, 'm', $restrict_types);
+		}
+	else if ($board[$to_x][$to_y]{0} != $board[$x][$y]{0})
+		{
+		record_a_move($moves, $board
+			,array('c', $board[$x][$y], $x, $y, $to_x, $to_y)
+			, 'c', $restrict_types);
+		return false;
+		}
+	return false;
+	}
+
+function attempt_a_ray_move(&$moves, &$board, $x, $y, $ray_x_dir, $ray_y_dir)
+	{
+	$ray_x = $ray_x_dir;
+	$ray_y = $ray_y_dir;
+	while (attempt_a_move($moves, $board, $x, $y, $x + $ray_x, $y + $ray_y))
+		{
+		$ray_x += $ray_x_dir;
+		$ray_y += $ray_y_dir;
+		}
+	}
+
+function generate_move(&$moves, &$board, $x, $y, $piece)
+	{
+	$piece_type = $piece{1};
+	if ($piece_type == 'p') // pawn (or groan)
+		{
+		$pawn_dir = 1;
+		$start_row = 1;
+		if ($piece{0} == 'w')
+			{
+			$pawn_dir = -1;
+			$start_row = $board['h'] - 2;
+			}
+		attempt_a_move($moves, $board, $x, $y, $x, $y + $pawn_dir, 'm');
+		if ($y == $start_row)
+			attempt_a_move($moves, $board, $x, $y, $x, $y + $pawn_dir + $pawn_dir, 'm');
+
+		attempt_a_move($moves, $board, $x, $y, $x + 1, $y + $pawn_dir, 'c');
+		attempt_a_move($moves, $board, $x, $y, $x - 1, $y + $pawn_dir, 'c');
+		}
+	if ($piece_type == 'r' || $piece_type == 'q') // rook (or queen)
+		{
+		attempt_a_ray_move($moves, $board, $x, $y, 1, 0);
+		attempt_a_ray_move($moves, $board, $x, $y, -1, 0);
+		attempt_a_ray_move($moves, $board, $x, $y, 0, 1);
+		attempt_a_ray_move($moves, $board, $x, $y, 0, -1);
+		}
+	if ($piece_type == 'b' || $piece_type == 'q') // bishop (or queen)
+		{
+		attempt_a_ray_move($moves, $board, $x, $y, 1, 1);
+		attempt_a_ray_move($moves, $board, $x, $y, -1, 1);
+		attempt_a_ray_move($moves, $board, $x, $y, 1, -1);
+		attempt_a_ray_move($moves, $board, $x, $y, -1, -1);
+		}
+	if ($piece_type == 'n') // knight
+		{
+		attempt_a_move($moves, $board, $x, $y, $x+1, $y+2);
+		attempt_a_move($moves, $board, $x, $y, $x-1, $y+2);
+		attempt_a_move($moves, $board, $x, $y, $x+1, $y-2);
+		attempt_a_move($moves, $board, $x, $y, $x-1, $y-2);
+		attempt_a_move($moves, $board, $x, $y, $x+2, $y+1);
+		attempt_a_move($moves, $board, $x, $y, $x-2, $y+1);
+		attempt_a_move($moves, $board, $x, $y, $x+2, $y-1);
+		attempt_a_move($moves, $board, $x, $y, $x-2, $y-1);
+		}
+	if ($piece_type == 'k') // king
+		{
+		attempt_a_move($moves, $board, $x, $y, $x+1, $y+1);
+		attempt_a_move($moves, $board, $x, $y, $x+1, $y);
+		attempt_a_move($moves, $board, $x, $y, $x+1, $y-1);
+		attempt_a_move($moves, $board, $x, $y, $x-1, $y+1);
+		attempt_a_move($moves, $board, $x, $y, $x-1, $y);
+		attempt_a_move($moves, $board, $x, $y, $x-1, $y-1);
+		attempt_a_move($moves, $board, $x, $y, $x, $y+1);
+		attempt_a_move($moves, $board, $x, $y, $x, $y-1);
+		}
+	}
+
+function generate_moves(&$board, $set_global_restrict_type = false)
+	{
+//echo "generate_moves(board, $set_global_restrict_type)\n";
+	global $global_restrict_type;
+	$global_restrict_type = $set_global_restrict_type;
+echo "(global becomes $global_restrict_type)";
+
+	$board['asq'][$board['s']] = array();
+
+	$moves = array();
+
+	for ($y = 0; $y < $board['h']; ++$y)
+	for ($x = 0; $x < $board['w']; ++$x)
+		{
+		$piece = $board[$x][$y];
+		if ($piece{0} == $board['s'])
+			{
+			generate_move($moves, $board, $x, $y, $piece);
+			}
+		}
+	return $moves;
+	}
+
+function algebraic($move)
+	{
+	return ($move[1]{1} == 'p' ? '' : strtoupper($move[1]{1}))
+		.chr($move[2]+97).($move[3]+1)
+		.($move[0]=='c'?'x':'-')
+		.chr($move[4]+97).($move[5]+1);
+	}
+
+?>

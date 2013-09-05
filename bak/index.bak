@@ -1,0 +1,708 @@
+<?php /*
+
+2013-07-18 - initial idea and code
+2013-07-19 - functionality and first chat implement, 1 player so far
+2013-07-20 - change from realtime to turn based ish, working 1 player prototype
+
+2013-07-26 - implemented basic websockets
+2013-07-27 - testing websockets
+
+2013-07-29 - fully working prototype
+
+todo:
+browser to browser communication
+implement checkmate (make 8 moves checking stillincheck)
+move recorder
+
+*/ ?><!DOCTYPE html>
+<html>
+<head><title>Chesscraft</title>
+<style>
+img
+	{
+	width: 32px;
+	height: 32px;
+	}
+</style>
+<script type="text/javascript"
+src="https://ajax.googleapis.com/ajax/libs/jquery/1.4.4/jquery.min.js"></script>
+<script type="text/javascript">
+var fps = 10.0;
+var checkmate = 0;
+var dragging = 0;
+var drag_src;
+var drag_pos;
+
+var online = 0;
+var observing = 0;
+
+function player(king)
+	{
+	this.king = king;
+	this.x = 0;
+	this.y = 0;
+	this.i = 0;
+	this.resource = 500;
+	}
+
+function pieces_between(x1, x2, y1, y2, dir_x, dir_y)
+	{
+	for (var check_x = x1 + dir_x, check_y = y1 + dir_y;
+		check_x != x2 || check_y != y2;
+		check_x += dir_x, check_y += dir_y)
+		{
+		if (board.pieces[board.width * check_x + check_y] != 0)
+			return true;
+		}
+	return false;
+	}
+
+player.prototype.checkmated = function() // fixme todo
+	{
+	return false;
+	}
+
+player.prototype.check_in_check = function() // clever function name is clever
+	{
+	var in_check = false;
+	for (var x = 0, i = 0; x < board.height; ++x)
+	for (var y = 0; y < board.width; ++y, ++i)
+		{
+		if (jQuery.inArray(board.pieces[i], enemy_piece[this.king]) != -1)
+			{
+			var dir_x = 0, dir_y = 0;
+			dir_x = x - this.x;
+			dir_y = y - this.y;
+			if (dir_x > 0) dir_x = 1;
+			if (dir_y > 0) dir_y = 1;
+			if (dir_x < 0) dir_x = -1;
+			if (dir_y < 0) dir_y = -1;
+
+			// check non-ray pieces first
+			if (board.pieces[i] == 6 || board.pieces[i] == 12) // kings can check each other?
+				{
+				if (Math.max(Math.abs(this.x - x), Math.abs(this.y - y)) < 2)
+					return true;
+				}
+
+			if (board.pieces[i] == 1) // pawns
+				{
+				if (Math.abs(this.y-y) == 1 && this.x-x==-1)
+					return true;
+				}
+			if (board.pieces[i] == 7) // pawns
+				{
+				if (Math.abs(this.y-y) == 1 && this.x-x==1)
+					return true;
+				}
+
+			if (board.pieces[i] == 2 || board.pieces[i] == 8) // knights
+				{
+				if (Math.abs(this.x-x) == 1 && Math.abs(this.y-y) == 2
+				  ||Math.abs(this.x-x) == 2 && Math.abs(this.y-y) == 1)
+					return true;
+				}
+
+			// check ray pieces now
+			if (pieces_between(this.x, x, this.y, y, dir_x, dir_y))
+				continue;
+
+			if (board.pieces[i] == 4 || board.pieces[i] == 10) // rooks
+				{
+				if (this.x == x || this.y == y)
+					return true;
+				}
+			if (board.pieces[i] == 5 || board.pieces[i] == 11) // queens
+				{
+				if (this.x == x || this.y == y || 
+					Math.abs(this.x-x) == Math.abs(this.y-y))
+					return true;
+				}
+			if (board.pieces[i] == 3 || board.pieces[i] == 9) // bishops
+				{
+				if (Math.abs(this.x-x) == Math.abs(this.y-y))
+					return true;
+				}
+			}
+		}
+	}
+
+player.prototype.still_in_check = function(dragging, drag_pos, dest_x, dest_y, dest_pos)
+	{
+	var backup_drag = board.pieces[drag_pos],
+		backup_dest = board.pieces[dest_pos]
+		backup_x = this.x,
+		backup_y = this.y,
+		backup_i = this.i;
+	board.pieces[dest_pos] = piece_num[dragging];
+	if (drag_pos != -1) board.pieces[drag_pos] = 0;
+	if (dragging == this.king)
+		{
+		this.x = dest_x;
+		this.y = dest_y;
+		this.i = dest_pos;
+		}
+	if (this.check_in_check())
+		{
+		if (drag_pos != -1) board.pieces[drag_pos] = backup_drag;
+		board.pieces[dest_pos] = backup_dest;
+		if (dragging == this.king)
+			{
+			this.x = backup_x;
+			this.y = backup_y;
+			this.i = backup_i;
+			}
+		return true;
+		}
+	if (drag_pos != -1) board.pieces[drag_pos] = backup_drag;
+	board.pieces[dest_pos] = backup_dest;
+	if (dragging == this.king)
+		{
+		this.x = backup_x;
+		this.y = backup_y;
+		this.i = backup_i;
+		}
+	return false;
+	}
+
+player.prototype.think = function()
+	{
+	if (!this.check_in_check())
+		{
+		this.resource += 0;
+		return 'Resources: ' + this.resource;
+		}
+	return '<b>In check (resources: ' + this.resource + ')</b>';
+	}
+
+var white = new player('wk');
+var black = new player('bk');
+var side = 0;
+var my_side = -1;
+
+function think()
+	{
+	$('#top_status').html(black.think());
+	$('#bottom_status').html(white.think());
+	$('#status').html(side==0?'White to move':'Black to move');
+	}
+
+//           0     1     2     3     4     5     6     7     8     9     10    11    12
+var piece_name = ['',
+'white pawn', 'white knight', 'white bishop', 'white rook', 'white queen', 'white king',
+'black pawn', 'black knight', 'black bishop', 'black rook', 'black queen', 'black king'];
+var enemy_piece = {wk: [7,8,9,10,11], bk: [1,2,3,4,5]};
+var piece = ['--', 'wp', 'wn', 'wb', 'wr', 'wq', 'wk', 'bp', 'bn', 'bb', 'br', 'bq', 'bk'];
+var piece_num = {"--": 0, wp: 1, wn: 2, wb: 3, wr: 4, wq: 5, wk: 6, bp: 7, bn: 8, bb: 9, br: 10, bq: 11, bk: 12};
+var cost =  [0,   100,  300,  300,  500,  900,  0,    100,  300,  300,  500,  900,  0];
+var board = {
+	width: 8,
+	height: 8,
+	default_pieces: [10,8,9,11,12,9,8,10,
+                  7,7,7,7,7,7,7,7,
+                  0,0,0,0,0,0,0,0,
+                  0,0,0,0,0,0,0,0,
+                  0,0,0,0,0,0,0,0,
+                  0,0,0,0,0,0,0,0,
+                  1,1,1,1,1,1,1,1,
+                  4,2,3,5,6,3,2,4],
+	pieces: [],
+	encode: function()
+		{
+		var ret = '';
+		ret += board.width.toString().length > 1 ? board.width : '0' + board.width;
+		ret += board.height.toString().length > 1 ? board.height : '0' + board.height;
+		for (var i = 0; i < board.width * board.height; ++i)
+			ret += piece[board.pieces[i]];
+		ret += side;
+		return ret;
+		},
+	decode: function(coded)
+		{
+		board.width = coded.substring(0, 2) * 1;
+		board.height = coded.substring(2, 4) * 1;
+		for (var i = 4, j = 0; i < coded.length; i += 2, ++j)
+			board.pieces[j] = piece_num[coded.substring(i, i+2)];
+		side = coded.substring(coded.length-1, coded.length) * 1;
+		update_board();
+		}
+};
+
+var coordinate = [];
+
+function update_board(create)
+	{
+	for (var i = 0; i < board.width * board.height; ++i)
+		$("[alt="+i+"]").attr("src", "img/"+piece[board.pieces[i]]+".png");
+	think();
+	}
+
+function draw_board(create)
+	{
+	var i;
+
+	var html = "<div id=status></div>";
+	html += "<div id=top_status></div>";
+	for (i = 7; i < 12; ++i)
+		html += "<img class=spawn src=img/" + piece[i] + ".png title='Cost: " + cost[i] + "' alt=" + cost[i] + ">";
+	
+	html += "<table border=1>";
+
+	for (var x = 0, i = 0; x < board.height; ++x)
+		{
+		html += "<tr>";
+		for (var y = 0; y < board.width; ++y, ++i)
+			{
+			if (create)
+				{
+				coordinate[i] = [x, y];
+				board.pieces[i] = 0;
+				if (x == 0 && y == Math.floor(board.width / 2))
+					{
+					black.x = x;
+					black.y = y;
+					black.i = i;
+					board.pieces[i] = 12;
+					}
+				if (x == board.height - 1 && y == Math.floor(board.width / 2))
+					{
+					white.x = x;
+					white.y = y;
+					white.i = i;
+					board.pieces[i] = 6;
+					}
+				}
+			if (((x * (board.width % 2 + 1)) + i) % 2 == 0)
+				html += "<td bgcolor=white>";
+			else
+				html += "<td bgcolor=lightgrey>";
+			html += "<img src=img/" + piece[board.pieces[i]] + ".png alt=" + i + " />";
+			html += "</td>";
+			}
+		html += "</tr>";
+		}
+	html += "</table>";
+	for (i = 1; i < 6; ++i)
+		html += "<img class=spawn src=img/" + piece[i] + ".png title='Cost: " + cost[i] + "' alt=" + cost[i] + ">";
+	html += "<div id=bottom_status></div>";
+	html += "<div id=action>&nbsp;</div>";
+	$("#board").html(html);
+
+	$("td").mouseup(function()
+		{
+		if (dragging != 0)
+			{
+			var destination = this.childNodes[0].src.replace(/^.*\/|\.[^.]*$/g, '');
+			var dest_pos = this.childNodes[0].alt;
+			var dest_x = coordinate[dest_pos][0];
+			var dest_y = coordinate[dest_pos][1];
+			var drag_ok = true;
+			var casualty = this.childNodes[0].src.replace(/^.*\/|\.[^.]*$/g, '');
+
+			if ((side == 0 && dragging.substring(0,1) != 'w') ||
+			    (side != 0 && dragging.substring(0,1) != 'b'))
+				{
+				$('#action').html('Not your turn');
+				drag_ok = false;
+				}
+			else if (drag_pos == -1) // spawned piece
+				{
+				if (casualty != '--')
+					drag_ok = false;
+
+				if (dragging == 'bp' && dest_x != 1)
+					drag_ok = false;
+				else if (dragging.substring(0,1) == 'b' && dragging != 'bp' && dest_x != 0)
+					drag_ok = false;
+
+				if (dragging == 'wp' && dest_x != board.height - 2)
+					drag_ok = false;
+				else if (dragging.substring(0,1) == 'w' && dragging != 'wp' && dest_x != board.height - 1)
+					drag_ok = false;
+				}
+			else
+				{
+				if (dest_pos == drag_pos)
+					drag_ok = false;
+				if (destination.substring(0,1) == dragging.substring(0,1))
+					drag_ok = false; // same color
+
+				var drag_p = dragging.substring(2,1)
+				var drag_x = coordinate[drag_pos][0];
+				var drag_y = coordinate[drag_pos][1];
+
+				var line_move = false;
+				var diagonal_move = false;
+				var dir_x = 0;
+				var dir_y = 0;
+
+				if (drag_x == dest_x || drag_y == dest_y)
+					{
+					dir_x = dest_x - drag_x;
+					dir_y = dest_y - drag_y;
+					line_move = true;
+					}
+				if (Math.abs(drag_x - dest_x) == Math.abs(drag_y - dest_y))
+					{
+					dir_x = dest_x - drag_x;
+					dir_y = dest_y - drag_y;
+					diagonal_move = true;
+					}
+				if (dir_x > 0) dir_x = 1;
+				if (dir_y > 0) dir_y = 1;
+				if (dir_x < 0) dir_x = -1;
+				if (dir_y < 0) dir_y = -1;
+
+				if (drag_p == 'r' && !line_move)
+					drag_ok = false;
+				if (drag_p == 'b' && !diagonal_move)
+					drag_ok = false;
+				if (drag_p == 'q' && !diagonal_move && !line_move)
+					drag_ok = false;
+				if (drag_p == 'k' && Math.max(Math.abs(drag_x - dest_x),
+					     Math.abs(drag_y - dest_y)) > 1)
+					drag_ok = false;
+				if (drag_p == 'n')
+					{
+					if ((Math.abs(drag_x - dest_x) == 1 &&
+					     Math.abs(drag_y - dest_y) == 2)
+					  ||(Math.abs(drag_x - dest_x) == 2 &&
+					     Math.abs(drag_y - dest_y) == 1))
+						{}
+					else
+						drag_ok = false;
+					}
+
+				if (line_move || diagonal_move) // disallow jump-overs
+					{
+					for (var check_x = drag_x + dir_x, check_y = drag_y + dir_y;
+						check_x != dest_x || check_y != dest_y;
+						check_x += dir_x, check_y += dir_y)
+						{
+						var check_this = $("[alt="+(board.width * check_x + check_y)+"]");
+						if (check_this[0].src.replace(/^.*\/|\.[^.]*$/g, '') != '--')
+							drag_ok = false;
+						}
+					}
+
+				if (drag_p== 'p')
+					{
+					if (dragging == 'bp' && (drag_x > dest_x || drag_x - dest_x < -2))
+						drag_ok = false;
+					if (dragging == 'wp' && (drag_x < dest_x || drag_x - dest_x > 2))
+						drag_ok = false;
+					if (dragging == 'bp' && drag_x - dest_x == -2 && drag_x != 1)
+						drag_ok = false;
+					if (dragging == 'wp' && drag_x - dest_x == 2 && drag_x != board.height - 2)
+						drag_ok = false;
+					if (drag_y == dest_y)
+						{
+						if (casualty != '--')
+							drag_ok = false;
+						}
+					else if (Math.abs(drag_y - dest_y) == 1)
+						{
+						if (dragging == 'bp' && (drag_x > dest_x || drag_x - dest_x < -1))
+							drag_ok = false;
+						if (dragging == 'wp' && (drag_x < dest_x || drag_x - dest_x > 1))
+							drag_ok = false;
+						if (casualty == '--')
+							drag_ok = false;
+						}
+					else
+						drag_ok = false;
+					}
+
+				if (casualty == 'bk' || casualty == 'wk')
+					drag_ok = false;
+
+				}
+
+			// are we still in check?
+			if (side == 1 && black.still_in_check(dragging, drag_pos, dest_x, dest_y, dest_pos))
+				{
+				drag_ok = false;
+				$('#action').html('Must move out of check');
+				}
+			if (side == 0 && white.still_in_check(dragging, drag_pos, dest_x, dest_y, dest_pos))
+				{
+				drag_ok = false;
+				$('#action').html('Must move out of check');
+				}
+				
+			if (drag_ok)
+				{
+				if (side == 0)
+					white.resource += 50;
+				else
+					black.resource += 50;
+				side = (side == 0? 1:0);
+				var casualty_cost = cost[piece_num[casualty]];
+				if (casualty_cost && dragging.substring(0,1) == 'w')
+					white.resource += casualty_cost;
+				if (casualty_cost && dragging.substring(0,1) == 'b')
+					black.resource += casualty_cost;
+
+				if (dragging == 'wp' && dest_x == 0)
+					dragging = 'wq';
+				else if (dragging == 'bp' && dest_x == board.height - 1)
+					dragging = 'bq'; //this.childNodes[0].src = "img/bq.png";
+				this.childNodes[0].src = "img/" + dragging + ".png";
+
+				board.pieces[dest_pos] = piece_num[dragging];
+				if (dragging == 'wk')
+					{
+					white.x = dest_x;
+					white.y = dest_y;
+					white.i = dest_pos;
+					}
+				if (dragging == 'bk')
+					{
+					black.x = dest_x;
+					black.y = dest_y;
+					black.i = dest_pos;
+					}
+
+				if (drag_pos != -1)
+					{
+					board.pieces[drag_pos] = 0;
+					drag_src.src = "img/--.png";
+					$('#action').html('Moved a ' + piece_name[piece_num[dragging]]);
+					}
+				else if (dragging)
+					{
+					if (dragging.substring(0,1) == 'b')
+						black.resource -= drag_src.alt;
+					if (dragging.substring(0,1) == 'w')
+						white.resource -= drag_src.alt;
+					$('#action').html('Spawned a ' + piece_name[piece_num[dragging]]);
+					}
+				update_board();
+
+				socket.h.send('move|<?php echo $_REQUEST['game'] * 1 ?>|'
+					+(side*1)+'|'+board.encode()+'|'+white.resource+'|'+black.resource);
+
+				if (white.checkmated() || black.checkmated())
+					checkmate = 1;
+				}
+			dragging = 0;
+			}
+		return false;
+		});
+
+	$("body").mouseup(function()
+		{
+		dragging = 0;
+		return false;
+		});
+
+	$("td img,img.spawn").mousedown(function()
+		{
+		if (checkmate == 1)
+			return false;
+		if (my_side != side)
+			{
+			$('#action').html('Not your turn');
+			return false;
+			}
+
+		if (dragging == 0)
+			{
+			dragging = this.src.replace(/^.*\/|\.[^.]*$/g, '');
+			drag_src = this;
+			if ($(this).hasClass("spawn"))
+				{
+				drag_pos = -1;
+				if (dragging.substring(0,1) == 'w' && white.resource < this.alt)
+					{
+					$('#action').html('Can\'t afford a ' + piece_name[piece_num[dragging]] + ' for ' + this.alt);
+					dragging = 0;
+					}
+				else if (dragging.substring(0,1) == 'b' && black.resource < this.alt)
+					{
+					$('#action').html('Can\'t afford a ' + piece_name[piece_num[dragging]] + ' for ' + this.alt);
+					dragging = 0;
+					}
+				}
+			else
+				drag_pos = this.alt;
+
+			if (dragging == '--')
+				dragging = 0;
+			else
+				{
+				}
+
+			if (dragging != 0 && drag_pos == -1)
+				$('#action').html('Spawning a ' + piece_name[piece_num[dragging]] + ' for ' + this.alt);
+			else if (dragging != 0)
+				$('#action').html('Moving a ' + piece_name[piece_num[dragging]]);
+			}
+		else
+			{
+			dragging = 0;
+			alert("Booboo while dragging");
+			}
+		return false;
+		});
+
+	}
+
+var chatlog = [];
+
+function socket_protocol()
+	{
+	this.h = false;
+	}
+
+socket_protocol.prototype.initialize = function()
+	{
+	this.h = new WebSocket("ws://qw.quakephil.com:43188/chesscraft/server.php");
+	this.h.onopen = this.onopen;
+	this.h.onclose = this.onclose;
+	this.h.onmessage = this.onmessage;
+	}
+
+socket_protocol.prototype.onopen = function()
+	{
+	console.log('Socket has opened');
+	// why socket.h. and not this.h. ?
+	socket.h.send('ohai|<?php echo $_REQUEST['game'] * 1 ?>|'+board.encode());
+	}
+
+socket_protocol.prototype.onclose = function()
+	{
+	console.log('Socket has closed');
+	online = 0;
+	}
+
+socket_protocol.prototype.onmessage = function(m)
+	{
+	console.log(m);
+	if (!m) return;
+	if (!m.data) return;
+
+	var parts = m.data.split('|');
+	if (parts[0] == 'sup son')
+		my_side = -1;
+
+	if (parts[0] == 'sup son' || (parts[0] == 'ok' && online > 0))
+		{
+		if (parts.length == 8) // contains resource information
+			{
+			white.resource = parts[6] * 1;
+			black.resource = parts[7] * 1;
+			}
+
+		online = parts[1];
+		console.log('Joined game ' + online);
+		can_play('white', parts[2]);
+		can_play('black', parts[3]);
+
+		if ($('#playername').val() == parts[2] || $('#playername').val() == parts[3] || observing)
+			{
+			if ($('#playername').val() == parts[2])
+				my_side = 0;
+			else if ($('#playername').val() == parts[3])
+				my_side = 1;
+			$('#playas').css('display', 'none');
+			}
+
+		side = parts[4];
+		board.decode(parts[5]);
+		}
+	else if (parts[0] == 'chat')
+		{
+		$("#chat").append(parts[2] + "<br>").scrollTop(9999);
+		}
+	else if (parts[0] == 'oops')
+		{
+		alert(parts[2]);
+		}
+	else if (parts[0] == 'note')
+		{
+		alert(parts[2]);
+		}
+	}
+
+var socket = new socket_protocol();
+
+$(document).ready(function(){
+	draw_board(true);
+
+//	for (var i = 0; i < 64; ++i)
+//		board.pieces[i] = board.default_pieces[i];
+//	update_board();
+
+	/* this fucks with the on-demand in check checking (still_in_check)
+	setInterval(function()
+		{
+		think();
+		}, 1000.0/fps);
+*/
+	think();
+
+	$("#chattext").keydown(function(e) {
+		if (e.which == 13)
+			chat();
+		});
+
+	$("#playername").keydown(function(e) {
+		if (e.which == 13)
+			play_as('');
+		});
+
+	socket.initialize();
+});
+
+function can_play(which, can)
+	{
+	if (can == 0)
+		$('#play_as_' + which).css('display', 'inline-block');
+	else
+		$('#play_as_' + which).css('display', 'none');
+	}
+
+function play_as(which)
+	{
+	if ($.trim($("#playername").val()) == "")
+		{
+		alert('Enter a name');
+		return;
+		}
+
+	socket.h.send('playas|<?php echo $_REQUEST['game'] * 1 ?>|'+which
+		+'|'+$('#playername').val());
+
+	if (which == '')
+		$('#playername').attr('disabled', 'disabled');
+	}
+
+function chat()
+	{
+	if ($.trim($("#chattext").val()) == "")
+		return;
+
+	socket.h.send('chat|<?php echo $_REQUEST['game'] *1 ?>|'+$('#playername').val()+'|'+$('#chattext').val());
+
+	$("#chattext").val("");
+	}
+
+</script>
+</head>
+<body>
+<table border=0>
+<tr><td id=board></td><td valign=bottom><div id=chat style="overflow: auto; height: 300px"></div>
+<input type=text id=chattext>
+<input type=button value=chat onclick=chat()><br/>
+<div id=playas>
+<hr>
+<input type=button style="display:none" id=play_as_white value='play as white' onclick=play_as('white')>
+<input type=button style="display:none" id=play_as_black value='play as black' onclick=play_as('black')>
+<input type=button id=play_as_observe value='continue' onclick=play_as('')>
+<br/>
+Name: <input type=text id=playername></div>
+</td>
+</table>
+</body>
+</html>
